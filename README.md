@@ -6,7 +6,11 @@
 - **Preprocessing Pipeline**: Image enhancement for OCR optimization
 
 ## Quick Start 🚀
-
+---
+- ### Demo Video and Sample
+  ```
+     https://drive.google.com/drive/u/0/folders/1U2eyUFG38mO5mBRMthqydqseeuIxvLho
+  ```
 ### Prerequisites
 - Node.js 18+
 - compromise 14.14.4+
