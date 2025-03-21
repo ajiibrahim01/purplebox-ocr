@@ -1,11 +1,10 @@
-import { getDocument } from "pdfjs-dist";
-import { fromPath } from "pdf2pic";
-import Tesseract from "tesseract.js";
 import nlp from "compromise";
 import dates from "compromise-dates";
 import path from "path";
-import fs from "fs";
+import processImage from "./utils/imageProcessed.js";
+import processPdf from "./utils/pdfProcessed.js";
 import regex from "./utils/regex.js";
+// Added for preprocessing
 
 nlp.extend(dates);
 
@@ -23,50 +22,6 @@ if (typeof Promise.withResolvers !== "function") {
 const __dirname = path.resolve();
 const baseStorage = path.join(__dirname, "storage");
 
-async function processImage(filePath) {
-  const worker = await Tesseract.createWorker();
-  const {
-    data: { text },
-  } = await worker.recognize(filePath);
-  await worker.terminate();
-  return text;
-}
-
-async function processPdf(filePath) {
-  const buffer = await fs.promises.readFile(filePath);
-  const uint8Array = new Uint8Array(
-    buffer.buffer,
-    buffer.byteOffset,
-    buffer.length
-  );
-  const pdf = await getDocument({
-    data: uint8Array,
-    useSystemFonts: true,
-    disableFontFace: true,
-  }).promise;
-
-  let text = "";
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    text += content.items.map((item) => item.str).join(" ");
-  }
-
-  if (!text.trim()) {
-    const converter = fromPath(filePath, {
-      density: 300,
-      format: "png",
-      outdir: tempDir,
-      prefix: path.parse(filePath).name,
-    });
-    const pages = await converter.bulk(-1);
-    for (const page of pages) {
-      text += await processImage(page.path);
-    }
-  }
-  return text;
-}
-
 async function ocrService(filename) {
   try {
     const filePath = path.join(baseStorage, filename);
@@ -75,14 +30,20 @@ async function ocrService(filename) {
       fileExt
     );
 
-    const text = isImage
+    const rawText = isImage
       ? await processImage(filePath)
       : await processPdf(filePath);
 
+    // Post-process text
+    const cleanedText = rawText
+      .replace(/\s+/g, " ") // Collapse whitespace
+      .replace(/-\n/g, "") // Join hyphenated words
+      .replace(/\n{3,}/g, "\n"); // Normalize newlines
+
     const structuredData = {
-      ...regex(text),
-      entities: nlp(text),
-      rawText: text,
+      ...regex(cleanedText),
+      entities: nlp(cleanedText),
+      rawText: cleanedText,
       metadata: {
         fileType: isImage ? "Image" : "PDF",
         processedDate: new Date().toISOString(),
